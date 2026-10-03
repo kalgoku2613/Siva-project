@@ -1,11 +1,9 @@
 import React from 'react';
 import {
   LayoutDashboard,
-  Camera,
   Gamepad2,
   Thermometer,
-  Droplets,
-  TrendingUp,
+  Radio,
   Sliders
 } from 'lucide-react';
 import { TabType } from '../types';
@@ -18,16 +16,14 @@ interface MobileNavProps {
 export const MobileNav: React.FC<MobileNavProps> = ({ currentTab, onSelectTab }) => {
   const items: { id: TabType; label: string; icon: any }[] = [
     { id: 'dashboard', label: 'Dash', icon: LayoutDashboard },
-    { id: 'camera', label: 'Cam', icon: Camera },
-    { id: 'robot', label: 'Drive', icon: Gamepad2 },
+    { id: 'robot', label: 'Cockpit', icon: Gamepad2 },
     { id: 'sensors', label: 'Sensors', icon: Thermometer },
-    { id: 'moisture', label: 'Soil', icon: Droplets },
-    { id: 'predictions', label: 'AI', icon: TrendingUp },
-    { id: 'settings', label: 'Config', icon: Sliders }
+    { id: 'devices', label: 'Wi-Fi & ESP', icon: Radio },
+    { id: 'settings', label: 'Settings', icon: Sliders }
   ];
 
   return (
-    <nav className="mobile-nav">
+    <nav className="mobile-nav" role="navigation" aria-label="Mobile Navigation">
       {items.map((item) => {
         const Icon = item.icon;
         const isActive = currentTab === item.id;
@@ -36,8 +32,11 @@ export const MobileNav: React.FC<MobileNavProps> = ({ currentTab, onSelectTab })
             key={item.id}
             className={`mobile-nav-item ${isActive ? 'active' : ''}`}
             onClick={() => onSelectTab(item.id)}
+            aria-label={item.label}
           >
-            <Icon size={20} />
+            <div className="mobile-nav-icon-wrap">
+              <Icon size={20} />
+            </div>
             <span>{item.label}</span>
           </button>
         );

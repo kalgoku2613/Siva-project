@@ -5,13 +5,12 @@ interface SettingsPageProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   simulationMode: boolean;
+  onNavigate?: (tab: any) => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onToggleTheme, simulationMode }) => {
-  const [wifiSsid, setWifiSsid] = useState<string>('Home_IoT_Mesh');
-  const [wifiPass, setWifiPass] = useState<string>('••••••••••••');
-  const [esp1Ip, setEsp1Ip] = useState<string>('192.168.1.150');
-  const [esp2Ip, setEsp2Ip] = useState<string>('192.168.1.151');
+export const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onToggleTheme, simulationMode, onNavigate }) => {
+  const [esp1Ip, setEsp1Ip] = useState<string>(() => localStorage.getItem('esp1_ip') || 'Auto-Detecting');
+  const [esp2Ip, setEsp2Ip] = useState<string>(() => localStorage.getItem('esp2_ip') || 'Auto-Detecting');
   const [maxPumpSec, setMaxPumpSec] = useState<number>(10);
   const [cooldownSec, setCooldownSec] = useState<number>(30);
   const [motorTimeoutMs, setMotorTimeoutMs] = useState<number>(1500);
@@ -33,59 +32,62 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onToggleTheme
               <span>System Settings & Operational Limits</span>
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-              Network interfaces, safety interlocks, hardware calibration, and UI preferences
+              Automatic device linking, safety interlocks, hardware calibration, and UI preferences
             </p>
           </div>
         </div>
       </div>
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {/* Network & Device IPs */}
+        {/* Zero-Config Auto-Discovery Banner (No SSID/Password required) */}
         <div className="card">
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Wifi size={18} color="var(--accent)" />
-            <span>Wi-Fi Network & ESP32 IP Configuration</span>
-          </h3>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.3rem' }}>Wi-Fi SSID</label>
-              <input
-                type="text"
-                value={wifiSsid}
-                onChange={e => setWifiSsid(e.target.value)}
-                style={{ width: '100%' }}
-              />
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Wifi size={18} color="var(--accent)" />
+                <span>Zero-Config Wi-Fi Auto-Discovery</span>
+              </h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.3rem' }}>
+                No Wi-Fi credentials required. The system auto-detects active ESP32 devices on your connected network.
+              </p>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.3rem' }}>Wi-Fi Password</label>
-              <input
-                type="password"
-                value={wifiPass}
-                onChange={e => setWifiPass(e.target.value)}
-                style={{ width: '100%' }}
-              />
+            {onNavigate && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => onNavigate('devices')}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Radio size={14} />
+                <span>Auto-Detect ESP32s</span>
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+            <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                ESP1 (Camera + Motors)
+              </div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent)', marginTop: '0.3rem' }}>
+                {esp1Ip}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                Auto-detected MJPEG video stream & L298N driver
+              </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.3rem' }}>ESP1 (Camera + Motors) Static IP</label>
-              <input
-                type="text"
-                value={esp1Ip}
-                onChange={e => setEsp1Ip(e.target.value)}
-                style={{ width: '100%' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.3rem' }}>ESP2 (Sensors + Pump) Static IP</label>
-              <input
-                type="text"
-                value={esp2Ip}
-                onChange={e => setEsp2Ip(e.target.value)}
-                style={{ width: '100%' }}
-              />
+            <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                ESP2 (Sensors + Pump)
+              </div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--success)', marginTop: '0.3rem' }}>
+                {esp2Ip}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                Auto-detected DHT22, Soil, MQ sensors & relay
+              </div>
             </div>
           </div>
         </div>

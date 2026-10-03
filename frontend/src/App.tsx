@@ -190,7 +190,12 @@ export const App: React.FC = () => {
             <DiagnosticsPage onRunHealthCheck={handleRunHealthCheck} />
           )}
           {currentTab === 'settings' && (
-            <SettingsPage theme={theme} onToggleTheme={handleToggleTheme} simulationMode={simulationMode} />
+            <SettingsPage
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
+              simulationMode={simulationMode}
+              onNavigate={setCurrentTab}
+            />
           )}
         </main>
       </div>
