@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+  </defs>
+  <!-- Background Rounded Rect -->
+  <rect width="512" height="512" rx="128" fill="url(#brandGrad)" />
+
+  <!-- Inner Chip Surface -->
+  <rect x="72" y="72" width="368" height="368" rx="80" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-width="8" stroke-opacity="0.25" />
+
+  <!-- Water Drop & Leaf Emblem -->
+  <path d="M256 120 C256 120 160 260 160 320 C160 373 203 416 256 416 C309 416 352 373 352 320 C352 260 256 120 256 120 Z" fill="#ffffff" />
+  <path d="M256 220 C256 220 200 300 200 340 C200 370 225 396 256 396 C287 396 312 370 312 340 C312 300 256 220 256 220 Z" fill="url(#brandGrad)" />
+
+  <!-- Microcontroller Pin Accents -->
+  <rect x="236" y="44" width="40" height="28" rx="6" fill="#ffffff" />
+  <rect x="236" y="440" width="40" height="28" rx="6" fill="#ffffff" />
+  <rect x="44" y="236" width="28" height="40" rx="6" fill="#ffffff" />
+  <rect x="440" y="236" width="28" height="40" rx="6" fill="#ffffff" />
+</svg>
