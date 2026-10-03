@@ -56,10 +56,10 @@ echo ===================================================================
 echo.
 
 :: 6. Launch Backend in a background process
-start "ESP-Backend-Server" cmd /k "cd backend && npm start"
+start "ESP-Backend-Server" cmd /k "set PATH=C:\Program Files\nodejs;%PATH% && cd backend && npm start"
 
 :: 7. Launch Frontend Vite Dev Server in a background process
-start "ESP-Frontend-PWA" cmd /k "cd frontend && npm run dev"
+start "ESP-Frontend-PWA" cmd /k "set PATH=C:\Program Files\nodejs;%PATH% && cd frontend && npm run dev"
 
 :: 8. Wait 3 seconds for ports to bind, then open browser
 timeout /t 3 /nobreak >nul
