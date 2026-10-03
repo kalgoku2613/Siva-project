@@ -21,6 +21,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { TabType, SensorReading, DeviceStatus, SystemHealthReport } from './types';
 import { api } from './services/api';
 import { wsClient } from './services/websocket';
+import { supabaseService } from './services/supabaseClient';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
@@ -55,41 +56,51 @@ export const App: React.FC = () => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // WebSocket & Polling Sync
+  // Stale data counter interval (strictly dependent on lastDataTimestamp)
+  useEffect(() => {
+    const timeInterval = setInterval(() => {
+      setSecondsAgo(Math.floor((Date.now() - lastDataTimestamp) / 1000));
+    }, 1000);
+    return () => clearInterval(timeInterval);
+  }, [lastDataTimestamp]);
+
+  // WebSocket & Polling Sync (runs once on mount)
   useEffect(() => {
     wsClient.connect();
 
     const unsubscribe = wsClient.subscribe((data) => {
-      setTelemetry(data.telemetry);
-      setDevices(data.devices);
+      if (data.telemetry) setTelemetry(data.telemetry);
+      if (data.devices) setDevices(data.devices);
       setLastDataTimestamp(Date.now());
     });
 
     const initLoad = async () => {
       try {
         const res = await api.getSystemStatus();
-        setDevices(res.devices);
-        setTelemetry(res.telemetry);
-        setSimulationMode(res.simulationMode);
+        if (res.devices) setDevices(res.devices);
+        if (res.telemetry) setTelemetry(res.telemetry);
+        setSimulationMode(Boolean(res.simulationMode));
         setLastDataTimestamp(Date.now());
-      } catch {}
+      } catch {
+        // Fallback: If local server isn't reached (e.g. running on Vercel), check Supabase Cloud
+        if (supabaseService.isConfigured()) {
+          const cloudData = await supabaseService.fetchLatestTelemetry();
+          if (cloudData) {
+            setTelemetry(cloudData);
+            setLastDataTimestamp(cloudData.timestamp || Date.now());
+          }
+        }
+      }
     };
+
     initLoad();
-
-    // Secondary HTTP fallback polling every 5s if WS drops
-    const pollInterval = setInterval(initLoad, 5000);
-
-    // Stale data counter interval
-    const timeInterval = setInterval(() => {
-      setSecondsAgo(Math.floor((Date.now() - lastDataTimestamp) / 1000));
-    }, 1000);
+    const pollInterval = setInterval(initLoad, 4000);
 
     return () => {
       unsubscribe();
       clearInterval(pollInterval);
-      clearInterval(timeInterval);
     };
-  }, [lastDataTimestamp]);
+  }, []);
 
   const handleToggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');

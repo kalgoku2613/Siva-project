@@ -8,6 +8,7 @@ import {
   SystemHealthReport,
   MotorDirection
 } from '../types';
+import { supabaseService } from './supabaseClient';
 
 const API_BASE = '/api';
 
@@ -44,29 +45,67 @@ export const api = {
   getLatestTelemetry: () => fetchJson<{ success: boolean; telemetry: SensorReading }>(`${API_BASE}/sensors/current`),
   getHistory: (range: string = '1h') => fetchJson<{ success: boolean; range: string; readings: SensorReading[] }>(`${API_BASE}/sensors/history?range=${range}`),
 
-  // Robot Controls
-  moveRobot: (direction: MotorDirection, speed: number = 190) =>
-    fetchJson<{ success: boolean; direction: string }>(`${API_BASE}/robot/move`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ direction, speed })
-    }),
+  // Robot Controls (Local + Supabase Remote Fallback)
+  moveRobot: async (direction: MotorDirection, speed: number = 190) => {
+    try {
+      return await fetchJson<{ success: boolean; direction: string }>(`${API_BASE}/robot/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction, speed })
+      });
+    } catch (err) {
+      if (supabaseService.isConfigured()) {
+        const ok = await supabaseService.sendCommand('robot_move', { direction, speed });
+        return { success: ok, direction };
+      }
+      throw err;
+    }
+  },
 
-  // Actuators & Soil Deployment
-  deploySoil: () => fetchJson<{ success: boolean; message: string }>(`${API_BASE}/moisture/deploy`, { method: 'POST' }),
-  retractSoil: () => fetchJson<{ success: boolean; message: string }>(`${API_BASE}/moisture/retract`, { method: 'POST' }),
+  // Actuators & Soil Deployment (Local + Supabase Remote Fallback)
+  deploySoil: async () => {
+    try {
+      return await fetchJson<{ success: boolean; message: string }>(`${API_BASE}/moisture/deploy`, { method: 'POST' });
+    } catch (err) {
+      if (supabaseService.isConfigured()) {
+        const ok = await supabaseService.sendCommand('deploy_soil', {});
+        return { success: ok, message: 'Cloud command transmitted via Supabase' };
+      }
+      throw err;
+    }
+  },
+  retractSoil: async () => {
+    try {
+      return await fetchJson<{ success: boolean; message: string }>(`${API_BASE}/moisture/retract`, { method: 'POST' });
+    } catch (err) {
+      if (supabaseService.isConfigured()) {
+        const ok = await supabaseService.sendCommand('retract_soil', {});
+        return { success: ok, message: 'Cloud command transmitted via Supabase' };
+      }
+      throw err;
+    }
+  },
   setServoAngle: (angle: number) =>
     fetchJson<{ success: boolean; angle: number }>(`${API_BASE}/servo/angle`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ angle })
     }),
-  setPump: (on: boolean, durationMs: number = 4000) =>
-    fetchJson<{ success: boolean; active: boolean; error?: string }>(`${API_BASE}/pump/${on ? 'on' : 'off'}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ durationMs })
-    }),
+  setPump: async (on: boolean, durationMs: number = 4000) => {
+    try {
+      return await fetchJson<{ success: boolean; active: boolean; error?: string }>(`${API_BASE}/pump/${on ? 'on' : 'off'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ durationMs })
+      });
+    } catch (err) {
+      if (supabaseService.isConfigured()) {
+        const ok = await supabaseService.sendCommand(on ? 'pump_on' : 'pump_off', { durationMs });
+        return { success: ok, active: on };
+      }
+      throw err;
+    }
+  },
 
   // Automation
   getRules: () => fetchJson<{ success: boolean; rules: AutomationRule[] }>(`${API_BASE}/automation/rules`),

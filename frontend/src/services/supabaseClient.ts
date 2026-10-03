@@ -10,11 +10,11 @@ class SupabaseService {
 
   constructor() {
     const env = (import.meta as any).env || {};
-    const savedUrl = localStorage.getItem('supabase_url') || env.VITE_SUPABASE_URL || env.SUPABASE_URL || '';
-    const savedKey = localStorage.getItem('supabase_key') || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '';
+    const rawUrl = (localStorage.getItem('supabase_url') || env.VITE_SUPABASE_URL || env.SUPABASE_URL || '').trim();
+    const rawKey = (localStorage.getItem('supabase_key') || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.SUPABASE_KEY || env.SUPABASE_SECRET_KEY || '').trim();
 
-    if (savedUrl && savedKey) {
-      this.config = { url: savedUrl, anonKey: savedKey };
+    if (rawUrl && rawKey) {
+      this.config = { url: rawUrl.replace(/\/+$/, ''), anonKey: rawKey };
     }
   }
 
