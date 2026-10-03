@@ -33,3 +33,6 @@ desktop.ini
 # Arduino / PlatformIO
 .pio/
 .clangd/
+
+versal pass.txt
+*pass*.txt
