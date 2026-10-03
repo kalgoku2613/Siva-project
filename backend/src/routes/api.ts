@@ -255,24 +255,43 @@ apiRouter.delete('/diagnostics/logs', (req: Request, res: Response) => {
 
 // 9. Network IP Scanner & Device Pairing
 apiRouter.get('/network/subnets', (req: Request, res: Response) => {
-  const subnets = NetworkScanner.getLocalSubnets();
-  res.json({ success: true, subnets });
+  try {
+    const subnets = NetworkScanner.getLocalSubnets();
+    res.json({ success: true, subnets });
+  } catch (err: any) {
+    res.json({ success: true, subnets: ['192.168.1'] });
+  }
 });
 
 apiRouter.post('/network/scan', async (req: Request, res: Response) => {
-  const { subnet, maxHosts } = req.body;
-  const discovered = await NetworkScanner.scanSubnet(subnet, maxHosts || 254);
-  res.json({ success: true, count: discovered.length, discovered });
+  try {
+    const { subnet, maxHosts } = req.body || {};
+    const discovered = await NetworkScanner.scanSubnet(subnet, maxHosts || 254);
+    res.json({ success: true, count: discovered.length, discovered });
+  } catch (err: any) {
+    console.error('[API] Scan error:', err);
+    res.json({
+      success: true,
+      count: 0,
+      discovered: [],
+      warning: `Scanner error: ${err.message || err}. You can also connect directly by entering your ESP32 IP below.`
+    });
+  }
 });
 
 apiRouter.post('/network/connect', async (req: Request, res: Response) => {
-  const { target, ip } = req.body;
-  if (!target || !ip || (target !== 'ESP1' && target !== 'ESP2')) {
-    return res.status(400).json({ success: false, error: 'Requires target ("ESP1" | "ESP2") and valid ip' });
-  }
+  try {
+    const { target, ip } = req.body || {};
+    if (!target || !ip || (target !== 'ESP1' && target !== 'ESP2')) {
+      return res.status(400).json({ success: false, error: 'Requires target ("ESP1" | "ESP2") and valid ip' });
+    }
 
-  const result = await NetworkScanner.connectDevice(target, ip);
-  res.json(result);
+    const result = await NetworkScanner.connectDevice(target, ip);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[API] Connect error:', err);
+    res.status(500).json({ success: false, error: err.message || 'Connection failed' });
+  }
 });
 
 // 10. Database Cleanup

@@ -67,14 +67,20 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
     setDiscovered([]);
     try {
       const res = await api.scanNetwork(selectedSubnet, 254);
-      setDiscovered(res.discovered);
-      setScanMessage(
-        res.discovered.length > 0
-          ? `Found ${res.discovered.length} active device(s) on your Wi-Fi network!`
-          : `Scan complete: No HTTP devices responded on ${selectedSubnet}.0/24.`
-      );
+      if (res.discovered && res.discovered.length > 0) {
+        setDiscovered(res.discovered);
+        setScanMessage(`Found ${res.discovered.length} active device(s) on your Wi-Fi network!`);
+      } else if (res.warning) {
+        setScanMessage(res.warning);
+      } else {
+        setScanMessage(`Scan complete: No devices found on ${selectedSubnet}.0/24. You can also connect directly by typing the ESP's IP address below.`);
+      }
     } catch (e: any) {
-      setScanMessage('Scan error: ' + e.message);
+      if (e.message?.includes('500') || e.message?.includes('Cannot reach') || e.message?.includes('Failed to fetch')) {
+        setScanMessage('Local Hub Offline: Please run "start-app.bat" to start the background server (port 5000), or enter your ESP IP directly below.');
+      } else {
+        setScanMessage('Notice: ' + e.message);
+      }
     } finally {
       setScanning(false);
     }

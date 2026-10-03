@@ -56,7 +56,7 @@ export class NetworkScanner {
   public static getArpDevices(subnetBase: string): Map<string, string> {
     const map = new Map<string, string>();
     try {
-      const output = execSync('arp -a', { timeout: 1500 }).toString();
+      const output = execSync('arp -a', { timeout: 2000, stdio: ['pipe', 'pipe', 'ignore'] }).toString();
       const lines = output.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
@@ -80,21 +80,25 @@ export class NetworkScanner {
    */
   public static checkPort(ip: string, port: number, timeoutMs: number = 350): Promise<boolean> {
     return new Promise(resolve => {
-      const socket = new net.Socket();
-      socket.setTimeout(timeoutMs);
-      socket.once('connect', () => {
-        socket.destroy();
-        resolve(true);
-      });
-      socket.once('error', () => {
-        socket.destroy();
+      try {
+        const socket = new net.Socket();
+        socket.setTimeout(timeoutMs);
+        socket.once('connect', () => {
+          socket.destroy();
+          resolve(true);
+        });
+        socket.once('error', () => {
+          socket.destroy();
+          resolve(false);
+        });
+        socket.once('timeout', () => {
+          socket.destroy();
+          resolve(false);
+        });
+        socket.connect(port, ip);
+      } catch {
         resolve(false);
-      });
-      socket.once('timeout', () => {
-        socket.destroy();
-        resolve(false);
-      });
-      socket.connect(port, ip);
+      }
     });
   }
 
@@ -104,22 +108,27 @@ export class NetworkScanner {
   public static probeHttp(ip: string, port: number = 80, path: string = '/', timeoutMs: number = 800): Promise<{ ok: boolean; status?: number; data?: any; raw?: string; latencyMs: number }> {
     const start = Date.now();
     return new Promise(resolve => {
-      const req = http.get({ hostname: ip, port, path, timeout: timeoutMs }, (res) => {
-        let raw = '';
-        res.on('data', chunk => raw += chunk);
-        res.on('end', () => {
-          const latencyMs = Date.now() - start;
-          try {
-            const data = JSON.parse(raw);
-            resolve({ ok: true, status: res.statusCode, data, raw, latencyMs });
-          } catch {
-            resolve({ ok: true, status: res.statusCode, raw, latencyMs });
-          }
+      try {
+        const req = http.get({ hostname: ip, port, path, timeout: timeoutMs }, (res) => {
+          let raw = '';
+          res.on('data', chunk => raw += chunk);
+          res.on('end', () => {
+            const latencyMs = Date.now() - start;
+            try {
+              const data = JSON.parse(raw);
+              resolve({ ok: true, status: res.statusCode, data, raw, latencyMs });
+            } catch {
+              resolve({ ok: true, status: res.statusCode, raw, latencyMs });
+            }
+          });
+          res.on('error', () => resolve({ ok: false, latencyMs: Date.now() - start }));
         });
-      });
 
-      req.on('timeout', () => { req.destroy(); resolve({ ok: false, latencyMs: Date.now() - start }); });
-      req.on('error', () => { resolve({ ok: false, latencyMs: Date.now() - start }); });
+        req.on('timeout', () => { req.destroy(); resolve({ ok: false, latencyMs: Date.now() - start }); });
+        req.on('error', () => { resolve({ ok: false, latencyMs: Date.now() - start }); });
+      } catch {
+        resolve({ ok: false, latencyMs: Date.now() - start });
+      }
     });
   }
 
@@ -238,65 +247,73 @@ export class NetworkScanner {
    * Scan entire subnet for all active devices (ESP nodes and all active Wi-Fi hosts)
    */
   public static async scanSubnet(subnetBase?: string, maxHosts: number = 254): Promise<DiscoveredDevice[]> {
-    const subnets = this.getLocalSubnets();
-    const base = subnetBase || (subnets.length > 0 ? subnets[0] : '192.168.1');
-
-    console.log(`[SCANNER] Scanning subnet ${base}.1 to ${base}.${maxHosts}...`);
-
-    // 1. Get known active dynamic devices from ARP
-    const arpDevices = this.getArpDevices(base);
-
-    // 2. Scan all hosts in fast batches
-    const batchSize = 35;
-    const discovered: DiscoveredDevice[] = [];
-    const discoveredIps = new Set<string>();
-
-    for (let i = 1; i <= maxHosts; i += batchSize) {
-      const end = Math.min(i + batchSize, maxHosts + 1);
-      const promises: Promise<DiscoveredDevice | null>[] = [];
-
-      for (let j = i; j < end; j++) {
-        const ip = `${base}.${j}`;
-        const mac = arpDevices.get(ip);
-        promises.push(this.probeIp(ip, 700, mac));
+    try {
+      let base = (subnetBase || '').trim().replace(/\.+$/, '');
+      if (!base) {
+        const subnets = this.getLocalSubnets();
+        base = subnets.length > 0 ? subnets[0] : '192.168.1';
       }
 
-      const results = await Promise.all(promises);
-      for (const dev of results) {
-        if (dev && !discoveredIps.has(dev.ip)) {
-          discoveredIps.add(dev.ip);
-          discovered.push(dev);
-          console.log(`[SCANNER] Found: ${dev.name} at ${dev.ip} (${dev.type})`);
+      console.log(`[SCANNER] Scanning subnet ${base}.1 to ${base}.${maxHosts}...`);
+
+      // 1. Get known active dynamic devices from ARP
+      const arpDevices = this.getArpDevices(base);
+
+      // 2. Scan all hosts in fast batches
+      const batchSize = 35;
+      const discovered: DiscoveredDevice[] = [];
+      const discoveredIps = new Set<string>();
+
+      for (let i = 1; i <= maxHosts; i += batchSize) {
+        const end = Math.min(i + batchSize, maxHosts + 1);
+        const promises: Promise<DiscoveredDevice | null>[] = [];
+
+        for (let j = i; j < end; j++) {
+          const ip = `${base}.${j}`;
+          const mac = arpDevices.get(ip);
+          promises.push(this.probeIp(ip, 700, mac));
+        }
+
+        const results = await Promise.all(promises);
+        for (const dev of results) {
+          if (dev && !discoveredIps.has(dev.ip)) {
+            discoveredIps.add(dev.ip);
+            discovered.push(dev);
+            console.log(`[SCANNER] Found: ${dev.name} at ${dev.ip} (${dev.type})`);
+          }
         }
       }
-    }
 
-    // 3. Add any remaining ARP devices that were not scanned (or outside maxHosts)
-    for (const [arpIp, mac] of arpDevices.entries()) {
-      if (!discoveredIps.has(arpIp)) {
-        discoveredIps.add(arpIp);
-        discovered.push({
-          ip: arpIp,
-          name: arpIp.endsWith('.1') ? 'Wi-Fi Router / Gateway' : `Active Wi-Fi Device (${mac.slice(0, 8)})`,
-          type: 'UNKNOWN',
-          port: 0,
-          latencyMs: 5,
-          mac,
-          details: `Active LAN host (MAC: ${mac})`
-        });
+      // 3. Add any remaining ARP devices that were not scanned (or outside maxHosts)
+      for (const [arpIp, mac] of arpDevices.entries()) {
+        if (!discoveredIps.has(arpIp)) {
+          discoveredIps.add(arpIp);
+          discovered.push({
+            ip: arpIp,
+            name: arpIp.endsWith('.1') ? 'Wi-Fi Router / Gateway' : `Active Wi-Fi Device (${mac.slice(0, 8)})`,
+            type: 'UNKNOWN',
+            port: 0,
+            latencyMs: 5,
+            mac,
+            details: `Active LAN host (MAC: ${mac})`
+          });
+        }
       }
+
+      // Sort: ESP devices first, then port 80/81 devices, then other hosts
+      discovered.sort((a, b) => {
+        if (a.type !== 'UNKNOWN' && b.type === 'UNKNOWN') return -1;
+        if (a.type === 'UNKNOWN' && b.type !== 'UNKNOWN') return 1;
+        if (a.port > 0 && b.port === 0) return -1;
+        if (a.port === 0 && b.port > 0) return 1;
+        return a.ip.localeCompare(b.ip, undefined, { numeric: true });
+      });
+
+      return discovered;
+    } catch (err: any) {
+      console.error('[SCANNER] Fatal scanSubnet error:', err);
+      return [];
     }
-
-    // Sort: ESP devices first, then port 80/81 devices, then other hosts
-    discovered.sort((a, b) => {
-      if (a.type !== 'UNKNOWN' && b.type === 'UNKNOWN') return -1;
-      if (a.type === 'UNKNOWN' && b.type !== 'UNKNOWN') return 1;
-      if (a.port > 0 && b.port === 0) return -1;
-      if (a.port === 0 && b.port > 0) return 1;
-      return a.ip.localeCompare(b.ip, undefined, { numeric: true });
-    });
-
-    return discovered;
   }
 
   /**

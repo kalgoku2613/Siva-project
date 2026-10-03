@@ -12,13 +12,23 @@ import {
 const API_BASE = '/api';
 
 export async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options);
+  let res: Response;
+  try {
+    res = await fetch(url, options);
+  } catch (err: any) {
+    throw new Error(`Cannot reach local server. Please ensure the backend is running via start-app.bat.`);
+  }
+
   if (!res.ok) {
     let errMsg = `HTTP Error ${res.status}`;
     try {
       const errObj = await res.json();
       if (errObj.error) errMsg = errObj.error;
     } catch {}
+
+    if (res.status === 500) {
+      errMsg = `Local backend hub (port 5000) returned error ${res.status}. Make sure 'start-app.bat' is actively running.`;
+    }
     throw new Error(errMsg);
   }
   return res.json();
@@ -88,7 +98,7 @@ export const api = {
   // Network IP Scanner & Pair
   getSubnets: () => fetchJson<{ success: boolean; subnets: string[] }>(`${API_BASE}/network/subnets`),
   scanNetwork: (subnet?: string, maxHosts: number = 254) =>
-    fetchJson<{ success: boolean; count: number; discovered: any[] }>(`${API_BASE}/network/scan`, {
+    fetchJson<{ success: boolean; count: number; discovered: any[]; warning?: string }>(`${API_BASE}/network/scan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subnet, maxHosts })
