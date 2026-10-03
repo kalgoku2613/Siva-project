@@ -9,8 +9,9 @@ class SupabaseService {
   private ws: WebSocket | null = null;
 
   constructor() {
-    const savedUrl = localStorage.getItem('supabase_url') || (import.meta as any).env?.VITE_SUPABASE_URL || '';
-    const savedKey = localStorage.getItem('supabase_key') || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+    const env = (import.meta as any).env || {};
+    const savedUrl = localStorage.getItem('supabase_url') || env.VITE_SUPABASE_URL || env.SUPABASE_URL || '';
+    const savedKey = localStorage.getItem('supabase_key') || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '';
 
     if (savedUrl && savedKey) {
       this.config = { url: savedUrl, anonKey: savedKey };

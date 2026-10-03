@@ -5,7 +5,7 @@ import { SensorReading, MotorDirection } from '../types';
 
 export class SupabaseBridge {
   private static url: string = process.env.SUPABASE_URL || '';
-  private static key: string = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  private static key: string = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
   private static active: boolean = false;
 
   public static init(): void {
