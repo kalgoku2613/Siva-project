@@ -9,17 +9,26 @@ import {
   Search,
   CheckCircle2,
   AlertCircle,
-  Link,
-  Trash2
+  Link as LinkIcon,
+  Trash2,
+  Camera,
+  Thermometer,
+  Gamepad2,
+  ExternalLink,
+  ArrowRight,
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { DeviceStatus } from '../types';
 import { api } from '../services/api';
 
 interface DevicesPageProps {
   devices: DeviceStatus[];
+  onNavigate?: (tab: any) => void;
 }
 
-export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
+export const DevicesPage: React.FC<DevicesPageProps> = ({ devices, onNavigate }) => {
   const [pingResults, setPingResults] = useState<{ [key: string]: number }>({});
   const [qrDevice, setQrDevice] = useState<DeviceStatus | null>(null);
 
@@ -29,8 +38,10 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
   const [scanning, setScanning] = useState<boolean>(false);
   const [discovered, setDiscovered] = useState<any[]>([]);
   const [scanMessage, setScanMessage] = useState<string>('');
+  const [autoPaired, setAutoPaired] = useState<{ esp1?: string; esp2?: string }>({});
 
-  // Manual Connect state
+  // Manual Direct Connect state
+  const [showManual, setShowManual] = useState<boolean>(false);
   const [manualTarget, setManualTarget] = useState<'ESP1' | 'ESP2'>('ESP1');
   const [manualIp, setManualIp] = useState<string>('192.168.1.150');
   const [connecting, setConnecting] = useState<boolean>(false);
@@ -52,7 +63,7 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
         }
       } catch {}
 
-      // Auto-scan on launch if any ESP device is currently offline
+      // Auto-scan connected network on launch if any ESP device is currently offline
       const esp1Online = devices.some(d => d.id === 'ESP1' && d.state === 'ONLINE');
       const esp2Online = devices.some(d => d.id === 'ESP2' && d.state === 'ONLINE');
       if (!esp1Online || !esp2Online) {
@@ -73,37 +84,39 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
     }
   };
 
-  const runScan = async (subnetToScan: string, autoPair: boolean = false) => {
+  const runScan = async (subnetToScan: string, autoPair: boolean = true) => {
     setScanning(true);
-    setScanMessage(`Scanning connected network (${subnetToScan}.1 - ${subnetToScan}.254) for ESP32 devices...`);
+    setScanMessage(`Scanning connected network (${subnetToScan}.1 to ${subnetToScan}.254) for ESP32 devices...`);
     setDiscovered([]);
     try {
       const res = await api.scanNetwork(subnetToScan, 254);
       if (res.discovered && res.discovered.length > 0) {
         setDiscovered(res.discovered);
-        setScanMessage(`Detected ${res.discovered.length} active device(s) on your Wi-Fi network.`);
+        setScanMessage(`Found ${res.discovered.length} active device(s) on your connected network.`);
 
-        // Auto-Pair detected ESP devices without requiring user to type or click
+        // Auto-Link detected ESP devices without requiring user interaction
         if (autoPair) {
-          const esp1Node = res.discovered.find((d: any) => d.type === 'ESP1');
+          const esp1Node = res.discovered.find((d: any) => d.type === 'ESP1' || d.port === 81);
           if (esp1Node) {
             await handleConnect('ESP1', esp1Node.ip);
+            setAutoPaired(prev => ({ ...prev, esp1: esp1Node.ip }));
           }
           const esp2Node = res.discovered.find((d: any) => d.type === 'ESP2');
           if (esp2Node) {
             await handleConnect('ESP2', esp2Node.ip);
+            setAutoPaired(prev => ({ ...prev, esp2: esp2Node.ip }));
           }
         }
       } else if (res.warning) {
         setScanMessage(res.warning);
       } else {
-        setScanMessage(`Subnet scan complete. No active nodes found on ${subnetToScan}.0/24.`);
+        setScanMessage(`Scan complete. No active ESP32 nodes found on ${subnetToScan}.x.`);
       }
     } catch (e: any) {
       if (e.message?.includes('500') || e.message?.includes('Cannot reach') || e.message?.includes('Failed to fetch')) {
-        setScanMessage('Local Hub Offline: Start "start-app.bat" on your Windows PC, or enter your ESP IP below.');
+        setScanMessage('Local Hub Offline: To scan your Wi-Fi directly, run "start-app.bat" on your PC or enter your ESP IP below.');
       } else {
-        setScanMessage('Scan notice: ' + e.message);
+        setScanMessage('Notice: ' + e.message);
       }
     } finally {
       setScanning(false);
@@ -141,18 +154,21 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
     }
   };
 
+  const detectedEsp1 = discovered.find(d => d.type === 'ESP1' || d.port === 81);
+  const detectedEsp2 = discovered.find(d => d.type === 'ESP2');
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {/* 1. Header Card with Zero-Config Guidance */}
+      {/* 1. Header & One-Touch Connected Network Scanner */}
       <div className="card">
-        <div className="card-header" style={{ marginBottom: '0.75rem' }}>
+        <div className="card-header" style={{ marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <h2 className="card-title">
-              <Radio size={22} color="var(--accent)" />
-              <span>Wi-Fi Network Scanner & Auto-Discovery</span>
+              <Wifi size={22} color="var(--accent)" />
+              <span>Connected Network Scanner</span>
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-              Zero configuration required — automatically detects ESP32 IPs on your connected network
+              Scans your connected local network to detect and link your ESP32 hardware
             </p>
           </div>
 
@@ -162,63 +178,74 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
           </button>
         </div>
 
+        {/* Network Status & Selector */}
         <div style={{
-          background: 'var(--accent-light)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          background: 'var(--bg-secondary)',
           border: '1px solid var(--border)',
           borderRadius: '12px',
           padding: '0.75rem 1rem',
-          fontSize: '0.82rem',
-          color: 'var(--text-primary)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.6rem'
+          marginBottom: '1rem'
         }}>
-          <Wifi size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
-          <span>
-            <strong>No SSID or password required.</strong> Power on your ESP32 devices and connect to your Wi-Fi. The scanner automatically finds their IP addresses on your local subnet.
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <span style={{
+              display: 'inline-block',
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--success)'
+            }} />
+            <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+              Connected Network:
+            </span>
+            {subnets.length > 1 ? (
+              <select
+                value={selectedSubnet}
+                onChange={e => setSelectedSubnet(e.target.value)}
+                style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem', fontWeight: 600 }}
+              >
+                {subnets.map(s => (
+                  <option key={s} value={s}>{s}.x ({s === '192.168.1' ? 'Local Wi-Fi' : 'Adapter'})</option>
+                ))}
+              </select>
+            ) : (
+              <span className="badge badge-secondary" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                {selectedSubnet}.x (Local Wi-Fi)
+              </span>
+            )}
+          </div>
+
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            Auto-discovers IP addresses on your active LAN
           </span>
         </div>
 
-        {clearMessage && (
-          <div style={{ background: 'var(--success-light)', color: 'var(--success)', padding: '0.6rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600, marginTop: '0.75rem' }}>
-            ✓ {clearMessage}
-          </div>
-        )}
-      </div>
+        {/* Big Mobile-First Scan Button */}
+        <button
+          className="btn btn-primary"
+          onClick={handleScan}
+          disabled={scanning}
+          style={{
+            width: '100%',
+            minHeight: '48px',
+            fontSize: '1rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.6rem',
+            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)'
+          }}
+        >
+          <RefreshCw size={18} className={scanning ? 'spin' : ''} />
+          <span>{scanning ? 'Scanning Connected Network...' : 'Scan Connected Network'}</span>
+        </button>
 
-      {/* 2. Network Scanner Tool (Optimized for Mobile) */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">
-            <Search size={20} color="var(--accent)" />
-            <span>Automatic Wi-Fi Device Discovery</span>
-          </div>
-
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleScan}
-            disabled={scanning}
-            style={{ minHeight: '38px', padding: '0.5rem 1rem' }}
-          >
-            <RefreshCw size={14} className={scanning ? 'spin' : ''} />
-            <span>{scanning ? 'Detecting...' : 'Scan & Auto-Connect'}</span>
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', maxWidth: '320px' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Subnet:</span>
-            <input
-              type="text"
-              value={selectedSubnet}
-              onChange={e => setSelectedSubnet(e.target.value)}
-              placeholder="e.g. 192.168.1"
-              style={{ flex: 1, minHeight: '40px' }}
-            />
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>.1-.254</span>
-          </div>
-        </div>
-
+        {/* Scanning message / status */}
         {scanMessage && (
           <div style={{
             fontSize: '0.85rem',
@@ -228,6 +255,7 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
             borderRadius: '10px',
             color: 'var(--text-primary)',
             fontWeight: 500,
+            marginTop: '0.85rem',
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem'
@@ -237,132 +265,182 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
           </div>
         )}
 
-        {/* Discovered Devices List */}
-        {discovered.length > 0 && (
-          <div style={{ marginTop: '1.25rem' }}>
-            <h4 style={{ fontSize: '0.92rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>
-              Discovered Network Nodes ({discovered.length}):
-            </h4>
+        {clearMessage && (
+          <div style={{ background: 'var(--success-light)', color: 'var(--success)', padding: '0.6rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600, marginTop: '0.75rem' }}>
+            ✓ {clearMessage}
+          </div>
+        )}
+      </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {discovered.map((dev, i) => {
-                const isEsp1 = dev.type === 'ESP1' || dev.port === 81;
-                const isEsp2 = dev.type === 'ESP2';
-
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '1rem',
-                      background: 'var(--bg-secondary)',
-                      border: isEsp1 || isEsp2 ? '2px solid var(--accent)' : '1px solid var(--border)',
-                      borderRadius: '12px',
-                      flexWrap: 'wrap',
-                      gap: '0.85rem'
-                    }}
-                  >
-                    <div style={{ flex: '1 1 260px' }}>
-                      <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <span>{dev.name}</span>
-                        <span className="badge badge-online" style={{ fontSize: '0.82rem', padding: '0.2rem 0.55rem' }}>{dev.ip}</span>
-                        {isEsp1 && <span className="badge" style={{ background: '#38bdf8', color: '#000', fontWeight: 700 }}>ESP1 CAM</span>}
-                        {isEsp2 && <span className="badge" style={{ background: '#34d399', color: '#000', fontWeight: 700 }}>ESP2 SENSORS</span>}
-                        {dev.port > 0 && <span className="badge badge-secondary" style={{ fontSize: '0.72rem' }}>Port {dev.port}</span>}
-                      </div>
-
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                        {dev.mac && <span>MAC: <code style={{ color: 'var(--accent)' }}>{dev.mac}</code></span>}
-                        <span>Latency: {dev.latencyMs}ms</span>
-                        {dev.details && <span>• {dev.details}</span>}
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', width: '100%', maxWidth: '360px' }}>
-                      <button
-                        className={`btn ${isEsp1 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                        onClick={() => handleConnect('ESP1', dev.ip)}
-                        disabled={connecting}
-                        style={{ flex: 1, minHeight: '42px', fontWeight: 600 }}
-                      >
-                        Link ESP1 (Cam)
-                      </button>
-                      <button
-                        className={`btn ${isEsp2 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                        onClick={() => handleConnect('ESP2', dev.ip)}
-                        disabled={connecting}
-                        style={{ flex: 1, minHeight: '42px', fontWeight: 600 }}
-                      >
-                        Link ESP2 (Sensors)
-                      </button>
-                    </div>
+      {/* 2. Discovered ESP Hardware Spotlight Cards */}
+      {(detectedEsp1 || detectedEsp2 || autoPaired.esp1 || autoPaired.esp2) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+          {/* ESP1 Detected Card */}
+          {(detectedEsp1 || autoPaired.esp1) && (
+            <div className="card" style={{ border: '2px solid var(--accent)', background: 'linear-gradient(180deg, rgba(2, 132, 199, 0.06) 0%, transparent 100%)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Camera size={20} color="var(--accent)" />
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>ESP1 Camera & Robot Car</h3>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MJPEG Stream + Motor Driver</div>
                   </div>
-                );
-              })}
+                </div>
+                <span className="badge badge-online">CONNECTED</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.75rem 0', fontSize: '0.88rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Assigned IP:</span>
+                <span style={{ fontWeight: 700, color: 'var(--accent)' }}>
+                  {detectedEsp1?.ip || autoPaired.esp1}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                {onNavigate && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => onNavigate('robot')}
+                    style={{ flex: 1, minHeight: '38px', fontWeight: 600 }}
+                  >
+                    <Gamepad2 size={15} />
+                    <span>Open Cockpit</span>
+                  </button>
+                )}
+                {onNavigate && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onNavigate('camera')}
+                    style={{ flex: 1, minHeight: '38px', fontWeight: 600 }}
+                  >
+                    <Camera size={15} />
+                    <span>Live Video</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ESP2 Detected Card */}
+          {(detectedEsp2 || autoPaired.esp2) && (
+            <div className="card" style={{ border: '2px solid var(--success)', background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.06) 0%, transparent 100%)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Thermometer size={20} color="var(--success)" />
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>ESP2 Sensors & Pump Hub</h3>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>DHT22, Soil, MQ Gas & Relay</div>
+                  </div>
+                </div>
+                <span className="badge badge-online">CONNECTED</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.75rem 0', fontSize: '0.88rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Assigned IP:</span>
+                <span style={{ fontWeight: 700, color: 'var(--success)' }}>
+                  {detectedEsp2?.ip || autoPaired.esp2}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                {onNavigate && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => onNavigate('sensors')}
+                    style={{ flex: 1, minHeight: '38px', fontWeight: 600 }}
+                  >
+                    <Thermometer size={15} />
+                    <span>View Telemetry</span>
+                  </button>
+                )}
+                {onNavigate && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onNavigate('dashboard')}
+                    style={{ flex: 1, minHeight: '38px', fontWeight: 600 }}
+                  >
+                    <ArrowRight size={15} />
+                    <span>Dashboard</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Discovered Network Devices List */}
+      {discovered.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">
+              <Radio size={20} color="var(--accent)" />
+              <span>Active Network Devices ({discovered.length})</span>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* 3. Manual IP Connect Form */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">
-            <Link size={20} color="var(--accent)" />
-            <span>Direct IP Manual Connect</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {discovered.map((dev, i) => {
+              const isEsp1 = dev.type === 'ESP1' || dev.port === 81;
+              const isEsp2 = dev.type === 'ESP2';
+
+              return (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.9rem',
+                    background: 'var(--bg-secondary)',
+                    border: isEsp1 || isEsp2 ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    borderRadius: '12px',
+                    flexWrap: 'wrap',
+                    gap: '0.85rem'
+                  }}
+                >
+                  <div style={{ flex: '1 1 240px' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span>{dev.name}</span>
+                      <span className="badge badge-online" style={{ fontSize: '0.82rem', padding: '0.2rem 0.55rem' }}>{dev.ip}</span>
+                      {isEsp1 && <span className="badge" style={{ background: '#38bdf8', color: '#000', fontWeight: 700 }}>ESP1 CAM</span>}
+                      {isEsp2 && <span className="badge" style={{ background: '#34d399', color: '#000', fontWeight: 700 }}>ESP2 SENSORS</span>}
+                      {dev.port > 0 && <span className="badge badge-secondary" style={{ fontSize: '0.72rem' }}>Port {dev.port}</span>}
+                    </div>
+
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      {dev.mac && <span>MAC: <code style={{ color: 'var(--accent)' }}>{dev.mac}</code></span>}
+                      <span>Latency: {dev.latencyMs}ms</span>
+                      {dev.details && <span>• {dev.details}</span>}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', width: '100%', maxWidth: '320px' }}>
+                    <button
+                      className={`btn ${isEsp1 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                      onClick={() => handleConnect('ESP1', dev.ip)}
+                      disabled={connecting}
+                      style={{ flex: 1, minHeight: '38px', fontWeight: 600 }}
+                    >
+                      Link ESP1
+                    </button>
+                    <button
+                      className={`btn ${isEsp2 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                      onClick={() => handleConnect('ESP2', dev.ip)}
+                      disabled={connecting}
+                      style={{ flex: 1, minHeight: '38px', fontWeight: 600 }}
+                    >
+                      Link ESP2
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Know the IP address of your ESP32? Enter it directly to establish an immediate link.
-        </p>
-
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select
-            value={manualTarget}
-            onChange={e => setManualTarget(e.target.value as any)}
-            style={{ width: '220px' }}
-          >
-            <option value="ESP1">ESP1 (Camera + Motors)</option>
-            <option value="ESP2">ESP2 (Sensors + Pump)</option>
-          </select>
-
-          <input
-            type="text"
-            placeholder="e.g. 192.168.1.150"
-            value={manualIp}
-            onChange={e => setManualIp(e.target.value)}
-            style={{ width: '200px' }}
-          />
-
-          <button
-            className="btn btn-primary"
-            onClick={() => handleConnect(manualTarget, manualIp)}
-            disabled={connecting}
-          >
-            <Link size={16} />
-            <span>{connecting ? 'Connecting...' : `Connect ${manualTarget}`}</span>
-          </button>
-        </div>
-
-        {connectResult && (
-          <div style={{
-            marginTop: '1rem',
-            padding: '0.75rem',
-            borderRadius: '8px',
-            fontSize: '0.85rem',
-            fontWeight: 600,
-            background: connectResult.success ? 'var(--success-light)' : 'var(--danger-light)',
-            color: connectResult.success ? 'var(--success)' : 'var(--danger)'
-          }}>
-            {connectResult.success ? '✓ ' : '✕ '} {connectResult.message}
-          </div>
-        )}
-      </div>
-
-      {/* 4. Active Connected Devices Grid */}
+      {/* 4. Active Connected Hardware Nodes Status */}
       <div className="grid-2">
         {devices.map(device => {
           const isOnline = device.state === 'ONLINE';
@@ -374,7 +452,7 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <Cpu size={22} color="var(--accent)" />
                   <div>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>{device.name}</h3>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{device.name}</h3>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Identifier: {device.id}</div>
                   </div>
                 </div>
@@ -395,7 +473,7 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Wi-Fi RSSI Signal:</span>
+                  <span style={{ color: 'var(--text-muted)' }}>Signal Strength:</span>
                   <span style={{ fontWeight: 600 }}>{device.rssi} dBm</span>
                 </div>
 
@@ -429,12 +507,86 @@ export const DevicesPage: React.FC<DevicesPageProps> = ({ devices }) => {
                 </button>
 
                 <a href={`http://${device.ip}/`} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
-                  <span>Hardware Debug UI ↗</span>
+                  <span>Hardware UI ↗</span>
                 </a>
               </div>
             </div>
           );
         })}
+      </div>
+
+      {/* 5. Direct IP Manual Connect (Clean Collapsible Accordion) */}
+      <div className="card">
+        <button
+          onClick={() => setShowManual(!showManual)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <LinkIcon size={18} color="var(--accent)" />
+            <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Direct IP Connect (Optional)</span>
+          </div>
+          {showManual ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+
+        {showManual && (
+          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.85rem' }}>
+              Know the exact IP of your ESP32? Connect directly without scanning.
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <select
+                value={manualTarget}
+                onChange={e => setManualTarget(e.target.value as any)}
+                style={{ flex: '1 1 180px', minHeight: '42px' }}
+              >
+                <option value="ESP1">ESP1 (Camera + Motors)</option>
+                <option value="ESP2">ESP2 (Sensors + Pump)</option>
+              </select>
+
+              <input
+                type="text"
+                placeholder="e.g. 192.168.1.150"
+                value={manualIp}
+                onChange={e => setManualIp(e.target.value)}
+                style={{ flex: '2 1 200px', minHeight: '42px' }}
+              />
+
+              <button
+                className="btn btn-primary"
+                onClick={() => handleConnect(manualTarget, manualIp)}
+                disabled={connecting}
+                style={{ minHeight: '42px' }}
+              >
+                <LinkIcon size={16} />
+                <span>{connecting ? 'Linking...' : `Connect ${manualTarget}`}</span>
+              </button>
+            </div>
+
+            {connectResult && (
+              <div style={{
+                marginTop: '0.75rem',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                background: connectResult.success ? 'var(--success-light)' : 'var(--danger-light)',
+                color: connectResult.success ? 'var(--success)' : 'var(--danger)'
+              }}>
+                {connectResult.success ? '✓ ' : '✕ '} {connectResult.message}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* QR Pairing Modal */}

@@ -46,6 +46,15 @@ async function bootstrap() {
   // Mount API routes
   app.use('/api', apiRouter);
 
+  // Global Express error handler to prevent unhandled 500 HTML responses
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err instanceof SyntaxError && 'body' in err) {
+      return res.status(400).json({ success: false, error: 'Malformed JSON payload' });
+    }
+    console.error('[SERVER ERROR]', err);
+    res.status(500).json({ success: false, error: err?.message || 'Internal Server Error' });
+  });
+
   // Health root
   app.get('/', (req, res) => {
     res.json({

@@ -39,16 +39,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ theme, onToggleTheme
       </div>
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {/* Zero-Config Auto-Discovery Banner (No SSID/Password required) */}
+        {/* Connected Network Devices */}
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
             <div>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Wifi size={18} color="var(--accent)" />
-                <span>Zero-Config Wi-Fi Auto-Discovery</span>
+                <span>Connected Network Devices</span>
               </h3>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.3rem' }}>
-                No Wi-Fi credentials required. The system auto-detects active ESP32 devices on your connected network.
+                The system automatically discovers and communicates with active ESP32 nodes on your connected network.
               </p>
             </div>
 

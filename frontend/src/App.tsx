@@ -184,7 +184,7 @@ export const App: React.FC = () => {
             <HistoryPage />
           )}
           {currentTab === 'devices' && (
-            <DevicesPage devices={devices} />
+            <DevicesPage devices={devices} onNavigate={setCurrentTab} />
           )}
           {currentTab === 'diagnostics' && (
             <DiagnosticsPage onRunHealthCheck={handleRunHealthCheck} />

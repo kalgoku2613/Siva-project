@@ -263,10 +263,11 @@ apiRouter.get('/network/subnets', (req: Request, res: Response) => {
   }
 });
 
-apiRouter.post('/network/scan', async (req: Request, res: Response) => {
+apiRouter.all('/network/scan', async (req: Request, res: Response) => {
   try {
-    const { subnet, maxHosts } = req.body || {};
-    const discovered = await NetworkScanner.scanSubnet(subnet, maxHosts || 254);
+    const subnet = req.body?.subnet || (req.query?.subnet as string) || '';
+    const maxHosts = parseInt(req.body?.maxHosts || (req.query?.maxHosts as string), 10) || 254;
+    const discovered = await NetworkScanner.scanSubnet(subnet, maxHosts);
     res.json({ success: true, count: discovered.length, discovered });
   } catch (err: any) {
     console.error('[API] Scan error:', err);
@@ -274,7 +275,7 @@ apiRouter.post('/network/scan', async (req: Request, res: Response) => {
       success: true,
       count: 0,
       discovered: [],
-      warning: `Scanner error: ${err.message || err}. You can also connect directly by entering your ESP32 IP below.`
+      warning: `Scanner error: ${err.message || err}. You can also connect directly by entering your ESP32 IP.`
     });
   }
 });
